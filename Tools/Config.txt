@@ -1,0 +1,5 @@
+PROG_BINARY=ntp_server.ino.esp32da.bin
+PROG_SINGLE_BINARY=full_image.bin
+SAVE_SINGLE_BINARY=full_image.bin
+PROG_BAUD=921600
+PROG_PORT=COM4
