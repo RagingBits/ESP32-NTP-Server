@@ -1,9 +1,3 @@
-
-
-pause
-
-REM @echo off
- 
 setlocal ENABLEDELAYEDEXPANSION
 
 for /F "delims=" %%a in (ntp_setup_conf.txt) do (set "%%a")
