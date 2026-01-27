@@ -115,7 +115,8 @@ ADVANCED
                  It's used in tandem with ReadFullImage for an automated production process.
     
     
-    
+    Hardware:
+500mA @ 5V
     
     
     
