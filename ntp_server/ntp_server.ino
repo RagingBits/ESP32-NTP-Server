@@ -1,4 +1,3 @@
-
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
 #include <Ticker.h>
@@ -9,14 +8,8 @@
 #include "ITimeSource.h"
 #include "NtpPacket.h"
 #include "NtpServer.h"
-/*
-
-Raging Bits fully fledged NTP server.
-An example project on how to use Raging Bits Atomic Clock Receiver Decoder UART module.
-
-Based of the following example:
-
-****************************************************************************************************************************
+#include "time_help.h"
+/****************************************************************************************************************************
   UDPSendReceive.ino - Simple Arduino web server sample for ESP8266/ESP32 AT-command shield
 
   For Ethernet shields using WT32_ETH01 (ESP32 + LAN8720)
@@ -26,9 +19,7 @@ Based of the following example:
   Based on and modified from ESP8266 https://github.com/esp8266/Arduino/releases
   Built by Khoi Hoang https://github.com/khoih-prog/WebServer_WT32_ETH01
   Licensed under MIT license
- ********************************************************************a********************************************************
- 
- */
+ ********************************************************************a*********************************************************/
 
 #define EEPROM_SSID         0
 #define EEPROM_PASS         1
@@ -37,11 +28,6 @@ Based of the following example:
 #define EEPROM_PASS_LEN     50
 #define EEPROM_OFFSET_LEN   1
 
-#define SCREEN_WIDTH 128 // OLED display width, in pixels
-#define SCREEN_HEIGHT 64 // OLED display height, in pixels
-#define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
-#define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
-#define MAX_RECEIVING_TIME_LEN  100
 
 #define DEBUG_ETHERNET_WEBSERVER_PORT     Serial2
 
@@ -53,6 +39,11 @@ Based of the following example:
 
 #define RXD1 17  // for loopback jumper these pins
 #define TXD1 5
+/*
+  #define RXD2 16
+  #define TXD2 15
+*/
+unsigned int localPort = 1883;    //10002;  // local port to listen on
 
 enum
 {
@@ -60,11 +51,14 @@ enum
   MEM_PASS
 };
 
-unsigned int localPort = 1883;    //10002;  // local port to listen on
+
 int8_t time_adjust = 0;
+
 ITimeSource my_time;
 NtpServer my_server(my_time);
 WiFiUDP udp;
+
+
 bool eth_connected;
 bool wifi_connected;
 IPAddress eth_ip;
@@ -77,10 +71,6 @@ uint8_t months =0;
 uint16_t years = 0;
 uint32_t query_counter = 0;
 char modulation[10];
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-uint8_t receiving_time[MAX_RECEIVING_TIME_LEN];
-uint8_t receiving_time_index = 0;
-
 
 void WiFiEvent(WiFiEvent_t event)
 {
@@ -153,6 +143,11 @@ void WiFiEvent(WiFiEvent_t event)
 }
 
 
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+#define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+#define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
 
 void disp_start(void)
 {
@@ -284,6 +279,9 @@ void setup()
 }
 
 
+#define MAX_RECEIVING_TIME_LEN  100
+uint8_t receiving_time[MAX_RECEIVING_TIME_LEN];
+uint8_t receiving_time_index = 0;
 
 void loop()
 {
@@ -384,7 +382,7 @@ void loop()
   if (nowlink != lastlink)
   {
     lastlink = nowlink;
-    
+    //C:\Users\eng_m\Documents\ArduinoData\packages\esp32\hardware\esp32\2.0.8\libraries\Ethernet\src
     if (nowlink)
     {
       Serial.print("Connected\r\n");
@@ -430,7 +428,42 @@ void loop()
 
       if((secs != 0) && (memcmp(modulation,"UNKN",4)))
       {
-        my_server.timeSource_.updateFromInternalClock(t_secs, t_minutes, t_hours, t_days, t_months, t_years, modulation);
+          TimeSource time_source = DCF77;
+          if(!memcmp(modulation,"DCF",3))
+          {
+             time_source = DCF77;
+          }
+          else
+          if(!memcmp(modulation,"MSF",3))
+          {
+            time_source = MSF60;
+          }
+          else
+          if(!memcmp(modulation,"JJY",3))
+          {
+            time_source = JJY;
+          }
+          else
+          if(!memcmp(modulation,"WWVB",4))
+          {
+            time_source = WWVB;
+          }
+
+
+          DateTime temp_data = 
+          {
+            .second = t_secs,
+            .minute = t_minutes,
+            .hour = t_hours,
+            .day = t_days,
+            .month = t_months,
+            .year = t_years
+          };
+
+        
+          DateTime utc_data = convert_to_utc(temp_data, time_source, 0);
+          my_server.timeSource_.updateFromInternalClock(utc_data.second, utc_data.minute, utc_data.hour, utc_data.day, utc_data.month, utc_data.year, modulation);
+          
       }
 
       receiving_time_index = 0;
