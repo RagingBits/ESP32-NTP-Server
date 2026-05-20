@@ -9,6 +9,7 @@
 #include "NtpPacket.h"
 #include "NtpServer.h"
 #include "time_help.h"
+#include "webserver.h"
 /****************************************************************************************************************************
   UDPSendReceive.ino - Simple Arduino web server sample for ESP8266/ESP32 AT-command shield
 
@@ -71,9 +72,12 @@ uint8_t months =0;
 uint16_t years = 0;
 uint32_t query_counter = 0;
 char modulation[10];
-
+char my_pass[100];
+char my_ssid[100];
+  
 void WiFiEvent(WiFiEvent_t event)
 {
+  char temp[100];
   switch (event) {
     case ARDUINO_EVENT_ETH_START:
       Serial.println("ETH Started");
@@ -89,7 +93,10 @@ void WiFiEvent(WiFiEvent_t event)
       Serial.print(", IPv4: ");
       Serial.print(ETH.localIP());
       eth_ip = ETH.localIP();
-
+      
+      sprintf(temp,"ETH: %d.%d.%d.%d", eth_ip[0], eth_ip[1], eth_ip[2], eth_ip[3]);
+      statusEth = String(temp);
+      
       if (ETH.fullDuplex()) {
         Serial.print(", FULL_DUPLEX");
       }
@@ -102,6 +109,7 @@ void WiFiEvent(WiFiEvent_t event)
       break;
     case ARDUINO_EVENT_ETH_DISCONNECTED:
       Serial.println("ETH Disconnected");
+      statusEth = String("ETH: Disconnected");
       eth_connected = false;
       if(wifi_connected)
       {
@@ -120,6 +128,9 @@ void WiFiEvent(WiFiEvent_t event)
         Serial.println(WiFi.localIP());  
         wifi_connected = true;
         wifi_ip = WiFi.localIP();
+
+        sprintf(temp,"WiFi: %d.%d.%d.%d", wifi_ip[0], wifi_ip[1], wifi_ip[2], wifi_ip[3]);
+        statusWifi = String(temp);
         //initializes the UDP state
         //This initializes the transfer buffer
         //udp.begin(WiFi.localIP(),8080);
@@ -134,7 +145,14 @@ void WiFiEvent(WiFiEvent_t event)
     case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
         Serial.println("WiFi lost connection");
         //WiFi.disconnect();
+        statusWifi = String("WiFi: Disconnected");
         wifi_connected = false;
+
+        if(' ' != my_ssid[0])
+        {
+            WiFi.disconnect();
+        }
+        
         break;
         
     default:
@@ -252,9 +270,9 @@ void setup()
 
   EepromStart();
 
-  char my_pass[100];
+  
   uint8_t my_pass_len = EEPROM_PASS_LEN;
-  char my_ssid[100];
+  
   uint8_t my_ssid_len = EEPROM_SSID_LEN;
   uint8_t my_offset_len = EEPROM_OFFSET_LEN;
   EepromRead(EEPROM_SSID, (uint8_t*)my_ssid, &my_ssid_len);
@@ -267,15 +285,18 @@ void setup()
   Serial.print(temp);
   
   my_server.timeSource_.setOffsetInHours(time_adjust);
-  
-  Serial.println("Starting WIFI:");
-  Serial.println(my_ssid);
-  WiFi.begin(my_ssid, my_pass);
-  
+
+  if(' ' != my_ssid[0])
+  {
+    Serial.println("Starting WIFI:");
+    Serial.println(my_ssid);
+    
+    WiFi.begin(my_ssid, my_pass);
+  }
 
   //udp.begin(8080);
   my_server.beginListening();
-  
+  webserverinit();
 }
 
 
@@ -336,7 +357,10 @@ void loop()
            counter++;
         }
         my_pass[counter] = '\0';
-    
+
+        webSsid = String(my_ssid);
+        webPass = String(my_pass);
+        
         EepromWrite(EEPROM_SSID, (uint8_t*)my_ssid, strlen(my_ssid)+1);
         EepromWrite(EEPROM_PASS, (uint8_t*)my_pass, strlen(my_pass)+1);
 
@@ -357,7 +381,7 @@ void loop()
          val = val<-23?-23:val;
 
          time_adjust = val;
-
+         timeOffsetHours = time_adjust;
          EepromWrite(EEPROM_OFFSET, (uint8_t*)&time_adjust, 1);
          
          char temp[100];
@@ -426,46 +450,63 @@ void loop()
       uint32_t t_months = atoi((const char*)&receiving_time[12]);
       uint32_t t_years = atoi((const char*)&receiving_time[15]);
 
-      if((secs != 0) && (memcmp(modulation,"UNKN",4)))
+      sprintf(temp, "%02d:%02d:%02d",t_hours,t_minutes,t_secs);
+      time1 = String(temp);
+      sprintf(temp, "%02d/%02d/%04d",t_days,t_months,t_years);
+      date1 = String(temp);          
+      
+      sprintf(temp,"Receiver: UNKN");
+      statusAtomic = String(temp);
+      
+      if(memcmp(modulation,"UNKN",4))
       {
-          TimeSource time_source = DCF77;
-          if(!memcmp(modulation,"DCF",3))
-          {
-             time_source = DCF77;
-          }
-          else
-          if(!memcmp(modulation,"MSF",3))
-          {
-            time_source = MSF60;
-          }
-          else
-          if(!memcmp(modulation,"JJY",3))
-          {
-            time_source = JJY;
-          }
-          else
-          if(!memcmp(modulation,"WWVB",4))
-          {
-            time_source = WWVB;
-          }
+        if(secs != 0)
+        {
+            TimeSource time_source = DCF77;
+            if(!memcmp(modulation,"DCF",3))
+            {
+               time_source = DCF77;
+               sprintf(temp,"Receiver: DCF77");
+               statusAtomic = String(temp);
+            }
+            else
+            if(!memcmp(modulation,"MSF",3))
+            {
+              time_source = MSF60;
+              sprintf(temp,"Receiver: MSF60");
+              statusAtomic = String(temp);
+            }
+            else
+            if(!memcmp(modulation,"JJY",3))
+            {
+              time_source = JJY;
+              sprintf(temp,"Receiver: JJY");
+               statusAtomic = String(temp);
+            }
+            else
+            if(!memcmp(modulation,"WWVB",4))
+            {
+              time_source = WWVB;
+              sprintf(temp,"Receiver: WWVB");
+               statusAtomic = String(temp);
+            }
+  
 
+            DateTime temp_data = 
+            {
+              .second = t_secs,
+              .minute = t_minutes,
+              .hour = t_hours,
+              .day = t_days,
+              .month = t_months,
+              .year = t_years
+            };
 
-          DateTime temp_data = 
-          {
-            .second = t_secs,
-            .minute = t_minutes,
-            .hour = t_hours,
-            .day = t_days,
-            .month = t_months,
-            .year = t_years
-          };
-
-        
-          DateTime utc_data = convert_to_utc(temp_data, time_source, 0);
-          my_server.timeSource_.updateFromInternalClock(utc_data.second, utc_data.minute, utc_data.hour, utc_data.day, utc_data.month, utc_data.year, modulation);
-          
+            DateTime utc_data = convert_to_utc(temp_data, time_source, 0);
+            my_server.timeSource_.updateFromInternalClock(utc_data.second, utc_data.minute, utc_data.hour, utc_data.day, utc_data.month, utc_data.year, modulation);
+        }
       }
-
+      
       receiving_time_index = 0;
       receiving_time[0] = 0;
     }
@@ -494,7 +535,12 @@ void loop()
       my_server.timeSource_.getTimeDate(temp,&temp_len);
       Serial.print(temp);Serial.print(" ");
       Serial.println(modulation);
-       
+      
+      sprintf(temp, "%02d:%02d:%02d",hours,minutes,secs);
+      time2 = String(temp);
+      sprintf(temp, "%02d/%02d/%04d",days,months,years);
+      date2 = String(temp);
+      
       update_disp();
   }
   
@@ -504,5 +550,5 @@ void loop()
     //Serial.printf("NTP Query\r\n");
 
   }
-
+webserverloop();
 }
