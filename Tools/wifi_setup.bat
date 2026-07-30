@@ -1,10 +1,3 @@
-setlocal ENABLEDELAYEDEXPANSION
-
-for /F "delims=" %%a in (ntp_setup_conf.txt) do (set "%%a")
-
-python3 wifi_setup.py --ip %NTP_IP% --ssid %SSID% --password %PASSWORD%
-
-echo %outs%
-
+python3 wifi_setup.py --ip 192.168.1.36 --ssid MORPH --password rm1000182
 pause
 

@@ -14,6 +14,7 @@
 
 #include "NTPPacket.h"
 #include "NTPServer.h"
+#include "webserver.h"
 
 void NtpServer::beginListening()
 {
@@ -49,7 +50,7 @@ bool NtpServer::processOneRequest()
         packet.leapIndicator(0);
         packet.versionNumber(4);
         packet.mode(4);
-        packet.stratum = 1;
+        packet.stratum = (timeSource == Ntp)?2:1;
         packet.poll = 10; // 6-10 per RFC 5905.
         packet.precision = -6; // ~15 ms
         packet.rootDelay = (45+5); // 45ms default according to lady heather code + ~5ms processing time in radio receiver+uart

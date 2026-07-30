@@ -1,6 +1,7 @@
 #ifndef WEBPAGE_H
 #define WEBPAGE_H
 
+
 const char INDEX_HTML[] = R"=====(
 <!DOCTYPE html>
 <html lang="en">
@@ -16,7 +17,7 @@ const char INDEX_HTML[] = R"=====(
             font-family: 'Orbitron', 'Segoe UI', Arial, sans-serif; 
             color: #ffffff; 
             background-color: #050508;
-            overflow: hidden;
+            overflow-hidden: auto; /* Changed to auto to accommodate expanded control interface */
         }
         
         body {
@@ -32,6 +33,7 @@ const char INDEX_HTML[] = R"=====(
         /* Top Half Layout Frame */
         .top-section {
             height: 50vh;
+            min-height: 400px;
             display: flex;
             background: linear-gradient(180deg, rgba(255, 0, 0, 0.03) 0%, rgba(0, 0, 0, 0.6) 100%);
             border-bottom: 2px solid rgba(255, 0, 0, 0.4);
@@ -103,12 +105,13 @@ const char INDEX_HTML[] = R"=====(
 
         /* Bottom Half Layout Frame */
         .bottom-section {
-            height: 50vh;
+            min-height: 50vh;
             display: flex;
             justify-content: center;
             align-items: center;
             position: relative; 
             background: rgba(0, 0, 0, 0.3); /* Transparent overlay allowing the tiled background to pass through */
+            padding: 40px 20px;
         }
 
         /* LOGO RENDERING IN UNCONSTRAINED NATURAL SIZE ANCHORED IN UPPER-LEFT SCREEN CORNER */
@@ -123,12 +126,23 @@ const char INDEX_HTML[] = R"=====(
             z-index: 10;          
         }
         
+        .dashboard-container {
+            display: flex;
+            gap: 30px;
+            width: 90%;
+            max-width: 900px;
+            justify-content: center;
+            align-items: stretch;
+            flex-wrap: wrap;
+        }
+
         form {
             background: rgba(5, 5, 5, 0.95);
             padding: 30px;
             border-radius: 6px;
-            width: 90%;
-            max-width: 420px;
+            flex: 1;
+            min-width: 320px;
+            max-width: 430px;
             box-shadow: 0 0 30px rgba(255, 0, 0, 0.25);
             border: 1px solid #ff0000;
             position: relative;
@@ -153,7 +167,7 @@ const char INDEX_HTML[] = R"=====(
             color: #ff0000;
         }
         
-        input[type="text"], input[type="password"], input[type="number"] {
+        input[type="text"], input[type="password"], input[type="number"], input[type="date"], input[type="time"] {
             width: 100%;
             padding: 12px;
             border: 1px solid rgba(255, 0, 0, 0.5);
@@ -163,13 +177,38 @@ const char INDEX_HTML[] = R"=====(
             font-size: 1rem;
             letter-spacing: 1px;
             transition: all 0.2s ease;
+            font-family: inherit;
         }
         
-        input:focus { 
+        input:focus, select:focus { 
             outline: none;
             border-color: #ff0000;
             box-shadow: 0 0 10px rgba(255, 0, 0, 0.6);
             background: rgba(10, 0, 0, 0.95);
+        }
+
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid rgba(255, 0, 0, 0.5);
+            border-radius: 3px;
+            background: rgba(5, 5, 5, 0.95);
+            color: #ffffff;
+            font-size: 1rem;
+            letter-spacing: 1px;
+            transition: all 0.2s ease;
+            font-family: inherit;
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml;utf8,<svg fill='%23ff0000' height='24' viewBox='0 0 24 24' width='24' xmlns='http://w3.org'><path d='M7 10l5 5 5-5z'/><path d='M0 0h24v24H0z' fill='none'/></svg>");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+        }
+
+        option {
+            background: #050508;
+            color: #ffffff;
         }
         
         button {
@@ -196,7 +235,7 @@ const char INDEX_HTML[] = R"=====(
             border-color: #ff0000;
         }
 
-        #status-msg {
+        #status-msg, #sync-status-msg {
             text-align: center;
             color: #ffffff;
             background: #ff0000;
@@ -210,6 +249,14 @@ const char INDEX_HTML[] = R"=====(
             box-shadow: 0 0 10px rgba(255,0,0,0.5);
             display: none;
         }
+
+        /* Container targeting the manual override fields conditionally */
+        .manual-time-container {
+            border-left: 2px solid #ff0000;
+            padding-left: 15px;
+            margin-top: 15px;
+            display: none;
+        }
         
         @media (max-width: 768px) {
             .clock-title { font-size: 2rem; margin-bottom: 10px; }
@@ -217,6 +264,8 @@ const char INDEX_HTML[] = R"=====(
             .date-display { font-size: 1.75rem; }
             .screen-logo { max-width: 60px; top: 15px; left: 15px; }
             .telemetry-bar { flex-direction: column; gap: 4px; bottom: 8px; left: 15px; font-size: 0.75rem; }
+            .dashboard-container { flex-direction: column; align-items: center; }
+            form { width: 100%; max-width: 100%; }
         }
     </style>
     <link href="https://googleapis.com" rel="stylesheet">
@@ -249,66 +298,145 @@ const char INDEX_HTML[] = R"=====(
     <div class="bottom-section">
         <!-- Floating Corner Logo Image Asset -->
         <img src="/logo.jpg" class="screen-logo" alt="System Logo">
+                    <form id="configForm" onsubmit="submitConfigForm(event)">
+                <div class="form-group">
+                    <label>WiFi Name (SSID)</label>
+                    <input type="text" name="ssid" id="field-ssid" autocomplete="off" required>
+                </div>
+                <div class="form-group">
+                    <label>WiFi Security Key</label>
+                    <input type="password" name="password" id="field-pass">
+                </div>
+                <div class="form-group">
+                    <label>UTC Offset (in Hours)</label>
+                    <input type="number" name="offset" id="field-offset" min="-12" max="12" value="0" required>
+                </div>
+                <button type="submit">Execute Configuration</button>
+                <div id="status-msg">Configuration Saved!</div>
+            </form>
 
-        <form id="configForm" onsubmit="submitConfigForm(event)">
-            <div class="form-group">
-                <label>WiFi Name (SSID)</label>
-                <input type="text" name="ssid" id="field-ssid" autocomplete="off" required>
-            </div>
-            <div class="form-group">
-                <label>WiFi Security Key</label>
-                <input type="password" name="password" id="field-pass">
-            </div>
-            <div class="form-group">
-                <label>UTC Offset (in Hours. Usually zero)</label>
-                <input type="number" name="offset" id="field-offset" min="-12" max="12" value="0" required>
-            </div>
-            <button type="submit">Execute Configuration</button>
-            <div id="status-msg">Configuration Saved!</div>
-        </form>
+            <form id="syncForm" onsubmit="submitSyncForm(event)">
+                <div class="form-group">
+                    <label>Time Reference Source</label>
+                    <select name="time_source" id="field-source" onchange="toggleSourceFields(this.value)" required>
+                        <option value="gps">GPS Satellite Synchronization</option>
+                        <option value="radio">Radio Atomic Signal (WWVB/DCF77)</option>
+                        <option value="ntp">Network Time Protocol (NTP)</option>
+                        <option value="manual">Manual Override</option>
+                    </select>
+                </div>
+
+                <!-- Conditional NTP Server Field Container -->
+                <div class="manual-time-container" id="ntp-controls">
+                    <div class="form-group">
+                        <label>NTP Server Address</label>
+                        <input type="text" name="ntp_server" id="field-ntp" placeholder="pool.ntp.org" autocomplete="off">
+                    </div>
+                </div>
+
+                <!-- Conditional Manual Time Field Container -->
+                <div class="manual-time-container" id="manual-controls">
+                    <div class="form-group">
+                        <label>Manual Date</label>
+                        <input type="date" name="manual_date" id="field-m-date">
+                    </div>
+                    <div class="form-group">
+                        <label>Manual Time</label>
+                        <input type="time" name="manual_time" id="field-m-time" step="1">
+                    </div>
+                </div>
+
+                <button type="submit">Update Time Engine</button>
+                <div id="sync-status-msg">Time Source Updated!</div>
+            </form>
+        </div>
     </div>
 
-    <script>
+        <script>
+        function toggleSourceFields(sourceValue) {
+            const manualBox = document.getElementById('manual-controls');
+            const ntpBox = document.getElementById('ntp-controls');
+            const dateField = document.getElementById('field-m-date');
+            const timeField = document.getElementById('field-m-time');
+            const ntpField = document.getElementById('field-ntp');
+            
+            // Handle Manual fields visibility and constraints
+            if (sourceValue === 'manual') {
+                manualBox.style.display = 'block';
+                dateField.required = true;
+                timeField.required = true;
+                
+                if(!dateField.value || !timeField.value) {
+                    const now = new Date();
+                    dateField.value = now.toISOString().split('T')[0];
+                    timeField.value = now.toTimeString().split(' ')[0];
+                }
+            } else {
+                manualBox.style.display = 'none';
+                dateField.required = false;
+                timeField.required = false;
+            }
+
+            // Handle NTP field visibility and constraints
+            if (sourceValue === 'ntp') {
+                ntpBox.style.display = 'block';
+                ntpField.required = true;
+            } else {
+                ntpBox.style.display = 'none';
+                ntpField.required = false;
+            }
+        }
+
         function fetchArduinoData() {
             fetch('/live-data')
                 .then(response => response.json())
                 .then(data => {
-                    // Update main clocks
                     document.getElementById('time-1').innerText = data.t1;
                     document.getElementById('date-1').innerText = data.d1;
                     document.getElementById('time-2').innerText = data.t2;
                     document.getElementById('date-2').innerText = data.d2;
                     
-                    // Update diagnostics bar
                     document.getElementById('stat-atomic').innerText = data.s_atom;
                     document.getElementById('stat-wifi').innerText = data.s_wifi;
                     document.getElementById('stat-eth').innerText = data.s_eth;
                     
                     // Prevent typewriter reset on active fields
                     if(document.activeElement.id !== 'field-ssid' && !document.getElementById('field-ssid').value) {
-                        document.getElementById('field-ssid').value = data.saved_ssid;
+                        document.getElementById('field-ssid').value = data.saved_ssid || '';
                     }
                     if(document.activeElement.id !== 'field-pass' && !document.getElementById('field-pass').value) {
-                        document.getElementById('field-pass').value = data.saved_pass;
+                        document.getElementById('field-pass').value = data.saved_pass || '';
                     }
                     if(document.activeElement.id !== 'field-offset' && !document.getElementById('field-offset').value) {
-                        document.getElementById('field-offset').value = data.saved_offset;
+                        document.getElementById('field-offset').value = data.saved_offset || '0';
+                    }
+                    if(document.activeElement.id !== 'field-ntp' && !document.getElementById('field-ntp').value) {
+                        document.getElementById('field-ntp').value = data.saved_ntp || 'pool.ntp.org';
+                    }
+
+                    // CRITICAL FIX: Only let incoming microcontroller data change the selector
+                    // if the user isn't actively working inside the sync form fields right now.
+                    const activeId = document.activeElement.id;
+                    const formsBeingEdited = ['field-source', 'field-ntp', 'field-m-date', 'field-m-time'];
+                    
+                    if(!formsBeingEdited.includes(activeId) && data.saved_source) {
+                        const srcField = document.getElementById('field-source');
+                        if(srcField.value !== data.saved_source) {
+                            srcField.value = data.saved_source;
+                            toggleSourceFields(data.saved_source);
+                        }
                     }
                 })
                 .catch(err => console.error("Link offline: ", err));
         }
 
-        // REPLACE THIS FUNCTION INSIDE YOUR CONFIGWEBPAGE.H
         function submitConfigForm(event) {
             event.preventDefault(); 
-            
             const btn = event.target.querySelector('button');
             const msg = document.getElementById('status-msg');
             
-            // 1. If the button is already locked out, drop this save click completely
             if (btn.disabled) return;
             
-            // 2. Lock the save button instantly to stop fast double-clicking
             btn.disabled = true;
             btn.style.opacity = "0.5";
             btn.innerText = "PROCESSING...";
@@ -323,29 +451,65 @@ const char INDEX_HTML[] = R"=====(
                     msg.style.display = 'block';
                     setTimeout(() => { msg.style.display = 'none'; }, 5000);
                 } else if (response.status === 429) {
-                    // Catches the firewall rejection from the Arduino block
                     msg.innerText = "⚠️ ERROR: TOO MANY REQUESTS";
                     msg.style.display = 'block';
                 }
             })
             .catch(err => console.error("Save failed: ", err))
             .finally(() => {
-                // 3. THE LOCKOUT CLOCK: Re-enable the button precisely after 5000ms (5 seconds)
                 setTimeout(() => {
                     btn.disabled = false;
                     btn.style.opacity = "1";
                     btn.innerText = "Execute Configuration";
-                }, 2000);
+                }, 5000);
             });
         }
 
+        function submitSyncForm(event) {
+            event.preventDefault();
+            const btn = event.target.querySelector('button');
+            const msg = document.getElementById('sync-status-msg');
+            
+            if (btn.disabled) return;
+            
+            btn.disabled = true;
+            btn.style.opacity = "0.5";
+            btn.innerText = "SYNCHRONISING...";
+
+            const form = document.getElementById('syncForm');
+            const formData = new FormData(form);
+
+            fetch('/save-sync', { method: 'POST', body: formData })
+            .then(response => {
+                if (response.ok) {
+                    msg.innerText = "Engine Source Updated!";
+                    msg.style.display = 'block';
+                    setTimeout(() => { msg.style.display = 'none'; }, 5000);
+                    
+                    // Release focus so background loop can immediately sync to new values
+                    document.activeElement.blur();
+                } else if (response.status === 429) {
+                    msg.innerText = "⚠️ ERROR: RATE LIMIT EXCEEDED";
+                    msg.style.display = 'block';
+                }
+            })
+            .catch(err => console.error("Sync routing down: ", err))
+            .finally(() => {
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.style.opacity = "1";
+                    btn.innerText = "Update Time Engine";
+                }, 5000);
+            });
+        }
 
         setInterval(fetchArduinoData, 250);
-        window.onload = fetchArduinoData;
+        window.onload = function() {
+            fetchArduinoData();
+        };
     </script>
 </body>
 </html>
 )=====";
 
 #endif /*WEBPAGE_H*/
-

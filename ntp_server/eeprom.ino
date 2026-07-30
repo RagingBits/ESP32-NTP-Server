@@ -16,7 +16,13 @@
 #define OFFSET_MAX_LEN              (1)
 
 
-#define EEPROM_LEN                  (OFFSET_ADDR+OFFSET_MAX_LEN)
+#define TIME_SOURCE_ADDR            (OFFSET_ADDR+OFFSET_MAX_LEN)
+#define TIME_SOURCE_MAX_LEN         (1)
+
+#define NTP_ADDR                    (TIME_SOURCE_ADDR+TIME_SOURCE_MAX_LEN)
+#define NTP_MAX_LEN     50
+
+#define EEPROM_LEN                  (NTP_ADDR+NTP_MAX_LEN)
 
 
 
@@ -31,16 +37,27 @@ typedef struct
 #define EEPROM_SSID         0
 #define EEPROM_PASS         1
 #define EEPROM_OFFSET       2
-#define EEPROM_TOTAL        3
+#define EEPROM_TIME_SOURCE  3
+#define EEPROM_NTP          4
+#define EEPROM_TOTAL        5
 
 #define EEPROM_SSID_LEN     SSID_MAX_LEN
 #define EEPROM_PASS_LEN     PASS_MAX_LEN
 #define EEPROM_OFFSET_LEN   OFFSET_MAX_LEN
+#define EEPROM_TIME_SOURCE_LEN TIME_SOURCE_MAX_LEN
+#define EEPROM_NTP_LEN      NTP_MAX_LEN
+
+
+
+
 
 /* EEPROM Global Variables ---------------------------------------------------- */
 uint8_t eeprom_ssid[SSID_MAX_LEN];
 uint8_t eeprom_paraphrase[PASS_MAX_LEN];
 uint8_t eeprom_offset[OFFSET_MAX_LEN];
+uint8_t eeprom_time_source[TIME_SOURCE_MAX_LEN];
+uint8_t eeprom_ntp[NTP_MAX_LEN];
+
 eeprom_client_flags_t eeprom_client_flags = {0U};
 
 
@@ -49,14 +66,18 @@ const uint8_t eeprom_lengths[EEPROM_TOTAL] =
 {
     SSID_MAX_LEN,
     PASS_MAX_LEN,
-    OFFSET_MAX_LEN
+    OFFSET_MAX_LEN,
+    TIME_SOURCE_MAX_LEN,
+    NTP_MAX_LEN
 };
 
 const uint16_t eeprom_addresses[EEPROM_TOTAL] = 
 {
     SSID_ADDR,
     PASS_ADDR,
-    OFFSET_ADDR
+    OFFSET_ADDR,
+    TIME_SOURCE_ADDR,
+    NTP_ADDR
 };
 
 
@@ -64,14 +85,18 @@ uint8_t *const eeprom_variables[EEPROM_TOTAL] =
 {
     &eeprom_ssid[0U],
     &eeprom_paraphrase[0U],
-    &eeprom_offset[0]
+    &eeprom_offset[0],
+    &eeprom_time_source[0],
+    &eeprom_ntp[0]
 };
 
 uint8_t const eeprom_name[EEPROM_TOTAL][24] = 
 {
     "SSID",
     "PASS",
-    "OFFSET"
+    "OFFSET",
+    "TIME_SOURCE",
+    "NTP"
 };
 
 bool string_compare(char *a, char *b, uint32_t len)

@@ -13,6 +13,21 @@ extern String date2;
 extern String statusAtomic;
 extern String statusWifi;
 extern String statusEth;
+extern uint8_t timeSource;
+extern String manualDate;
+extern String manualTime;
+extern String ntpServer;
+extern uint8_t timeSourceUpdated; 
+
+enum
+{
+  GPS = 0,
+  Radio,
+  Manual,
+  Ntp,
+  UnknownSource
+};
+
 
 void webserverloop();
 void webserverinit();

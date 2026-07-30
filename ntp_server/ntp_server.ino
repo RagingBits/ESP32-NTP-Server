@@ -10,6 +10,7 @@
 #include "NtpServer.h"
 #include "time_help.h"
 #include "webserver.h"
+#include "gps_parser.h"
 /****************************************************************************************************************************
   UDPSendReceive.ino - Simple Arduino web server sample for ESP8266/ESP32 AT-command shield
 
@@ -25,9 +26,14 @@
 #define EEPROM_SSID         0
 #define EEPROM_PASS         1
 #define EEPROM_OFFSET       2
+#define EEPROM_TIME_SOURCE  3
+#define EEPROM_NTP          4
+
 #define EEPROM_SSID_LEN     50
 #define EEPROM_PASS_LEN     50
 #define EEPROM_OFFSET_LEN   1
+#define EEPROM_TIME_SOURCE_LEN   1
+#define EEPROM_NTP_LEN     50
 
 
 #define DEBUG_ETHERNET_WEBSERVER_PORT     Serial2
@@ -74,6 +80,51 @@ uint32_t query_counter = 0;
 char modulation[10];
 char my_pass[100];
 char my_ssid[100];
+
+
+
+
+const uint32_t baudRates[] = {
+    115200,
+    57600,
+    38400,
+    19200,
+    9600
+};
+
+uint8_t autobaud_gps_uart(void)
+{
+  //Serial1.end();
+  
+  for (int i = 0; i < sizeof(baudRates)/sizeof(baudRates[0]); i++)
+  {
+      Serial1.begin(baudRates[i], SERIAL_8N1, RXD1, TXD1);
+      unsigned long start = millis();
+  
+      while (millis() - start < 1000)
+      {
+          if (Serial1.available())
+          {
+              char c = Serial1.read();
+  
+              if (c == '$')
+              {
+                  char temp[100];
+                  sprintf(temp,"GPS baudrate: %d",baudRates[i]);
+                  Serial.println(temp);
+                  
+                  return 1;
+              }
+          }
+      }
+  
+      //Serial1.end();
+  }
+
+  return 0;
+  
+}
+
   
 void WiFiEvent(WiFiEvent_t event)
 {
@@ -275,12 +326,24 @@ void setup()
   
   uint8_t my_ssid_len = EEPROM_SSID_LEN;
   uint8_t my_offset_len = EEPROM_OFFSET_LEN;
+  uint8_t my_time_source_len = EEPROM_TIME_SOURCE_LEN;
+  uint8_t my_ntp_server_len = EEPROM_NTP_LEN;
+  char temp[100];
   EepromRead(EEPROM_SSID, (uint8_t*)my_ssid, &my_ssid_len);
   EepromRead(EEPROM_PASS, (uint8_t*)my_pass, &my_pass_len);
   EepromRead(EEPROM_OFFSET, (uint8_t*)&time_adjust, &my_offset_len);
+  EepromRead(EEPROM_TIME_SOURCE, (uint8_t*)&timeSource, &my_time_source_len);
+  EepromRead(EEPROM_NTP, (uint8_t*)temp, &my_ntp_server_len);
+  ntpServer = String(temp);
+
+  if(timeSource > UnknownSource)
+  {
+    timeSource = 0;
+  }
+  
   
   Serial.println("NTP server offset:");
-  char temp[100];
+
   sprintf(temp,"%i:\n",time_adjust);
   Serial.print(temp);
   
@@ -314,10 +377,10 @@ void loop()
   uint32_t temp_len = 100;
   static bool lastlink = false;
   bool nowlink = ETH.linkUp();
+  static uint8_t last_time_source = UnknownSource;
 
   if(packetSize)
   {
-    
      char packetBuffer[255];
      uint8_t ReplyBuffer[] = "NACK";
      char my_ssid[255] = {0};
@@ -428,95 +491,171 @@ void loop()
     }   
   }
 
-  while (Serial1.available() > 0)
-  {
-    // read the incoming byte:
-    receiving_time[receiving_time_index] = Serial1.read();
-    if (receiving_time_index >= MAX_RECEIVING_TIME_LEN)
-    {
-      receiving_time_index = 0;
-      receiving_time[0] = 0;
-    }
-    else if (receiving_time[receiving_time_index] == '\n')
-    {
-      //full time is here
-
-      memcpy(modulation,&receiving_time[20],5);
-      
-      uint32_t t_secs = atoi((const char*)&receiving_time[6]);
-      uint32_t t_minutes = atoi((const char*)&receiving_time[3]);
-      uint32_t t_hours = atoi((const char*)&receiving_time[0]);
-      uint32_t t_days = atoi((const char*)&receiving_time[9]);
-      uint32_t t_months = atoi((const char*)&receiving_time[12]);
-      uint32_t t_years = atoi((const char*)&receiving_time[15]);
-
-      sprintf(temp, "%02d:%02d:%02d",t_hours,t_minutes,t_secs);
-      time1 = String(temp);
-      sprintf(temp, "%02d/%02d/%04d",t_days,t_months,t_years);
-      date1 = String(temp);          
-      
-      sprintf(temp,"Receiver: UNKN");
-      statusAtomic = String(temp);
-      
-      if(memcmp(modulation,"UNKN",4))
-      {
-        if(secs != 0)
-        {
-            TimeSource time_source = DCF77;
-            if(!memcmp(modulation,"DCF",3))
-            {
-               time_source = DCF77;
-               sprintf(temp,"Receiver: DCF77");
-               statusAtomic = String(temp);
-            }
-            else
-            if(!memcmp(modulation,"MSF",3))
-            {
-              time_source = MSF60;
-              sprintf(temp,"Receiver: MSF60");
-              statusAtomic = String(temp);
-            }
-            else
-            if(!memcmp(modulation,"JJY",3))
-            {
-              time_source = JJY;
-              sprintf(temp,"Receiver: JJY");
-               statusAtomic = String(temp);
-            }
-            else
-            if(!memcmp(modulation,"WWVB",4))
-            {
-              time_source = WWVB;
-              sprintf(temp,"Receiver: WWVB");
-               statusAtomic = String(temp);
-            }
   
+  if(timeSource == Manual)
+  {
+    last_time_source = timeSource;
+    if(manualTime != "")
+    {
+        uint32_t t_secs = atoi((const char*)&manualTime[6]);
+        uint32_t t_minutes = atoi((const char*)&manualTime[3]);
+        uint32_t t_hours = atoi((const char*)&manualTime[0]);
+        
+        uint32_t t_days = atoi((const char*)&manualDate[8]);
+        uint32_t t_months = atoi((const char*)&manualDate[5]);
+        uint32_t t_years = atoi((const char*)&manualDate[0]);
+        manualTime = "";
+        manualDate = "";
 
-            DateTime temp_data = 
-            {
-              .second = t_secs,
-              .minute = t_minutes,
-              .hour = t_hours,
-              .day = t_days,
-              .month = t_months,
-              .year = t_years
-            };
+        my_server.timeSource_.updateFromInternalClock(t_secs, t_minutes, t_hours, t_days, t_months, t_years, "MAN ");
 
-            DateTime utc_data = convert_to_utc(temp_data, time_source, 0);
-            my_server.timeSource_.updateFromInternalClock(utc_data.second, utc_data.minute, utc_data.hour, utc_data.day, utc_data.month, utc_data.year, modulation);
-        }
+        sprintf(temp,"Receiver: MANUAL");
+        statusAtomic = String(temp);
+    }
+  }
+  else if(timeSource == GPS)
+  {
+   
+    if(timeSource != last_time_source)
+    {
+      Serial.println("Starting Serial autobaud...");
+      delay(10);
+      if(autobaud_gps_uart())
+      {
+        last_time_source = timeSource;
+        sprintf(temp,"Receiver: GPS");
+        statusAtomic = String(temp);
       }
-      
-      receiving_time_index = 0;
-      receiving_time[0] = 0;
     }
     else
     {
-      receiving_time_index++;
+      while (Serial1.available() > 0)
+      {
+        GPS_Data temp_gps = GPS_DataIn(Serial1.read());
+        if (temp_gps.is_valid)
+        {
+              sprintf(temp, "%02d:%02d:%02d",temp_gps.hour,temp_gps.min,temp_gps.sec);
+              time1 = String(temp);
+              sprintf(temp, "%02d/%02d/%04d",temp_gps.day, temp_gps.month, 2000+temp_gps.year);
+              date1 = String(temp);       
+              my_server.timeSource_.updateFromInternalClock(temp_gps.sec, temp_gps.min, temp_gps.hour, temp_gps.day, temp_gps.month, 2000+temp_gps.year, "GPS ");
+        }
+      }
     }
-
   }
-
+  else if(timeSource == Ntp)
+  {
+    if((timeSource != last_time_source) || timeSourceUpdated)
+    {
+      sprintf(temp,"Receiver: Remote NTP");
+      statusAtomic = String(temp);
+        
+      Serial.print("Set NTP source server: ");
+      Serial.println(ntpServer.c_str());
+      configTime(0, 0, ntpServer.c_str());
+      last_time_source = timeSource;
+    }
+    
+  }
+  else
+  {  
+    if(timeSource != last_time_source)
+    {
+      Serial1.begin(115200, SERIAL_8N1, RXD1, TXD1);
+      delay(10);
+      last_time_source = timeSource;
+    }
+    
+    while (Serial1.available() > 0)
+    {
+        // read the incoming byte:
+        receiving_time[receiving_time_index] = Serial1.read();
+        if (receiving_time_index >= MAX_RECEIVING_TIME_LEN)
+        {
+          receiving_time_index = 0;
+          receiving_time[0] = 0;
+        }
+        else if (receiving_time[receiving_time_index] == '\n')
+        {
+          //full time is here
+    
+          memcpy(modulation,&receiving_time[20],5);
+          
+          uint32_t t_secs = atoi((const char*)&receiving_time[6]);
+          uint32_t t_minutes = atoi((const char*)&receiving_time[3]);
+          uint32_t t_hours = atoi((const char*)&receiving_time[0]);
+          uint32_t t_days = atoi((const char*)&receiving_time[9]);
+          uint32_t t_months = atoi((const char*)&receiving_time[12]);
+          uint32_t t_years = atoi((const char*)&receiving_time[15]);
+    
+          sprintf(temp, "%02d:%02d:%02d",t_hours,t_minutes,t_secs);
+          time1 = String(temp);
+          sprintf(temp, "%02d/%02d/%04d",t_days,t_months,t_years);
+          date1 = String(temp);          
+          
+          sprintf(temp,"Receiver: UNKN");
+          statusAtomic = String(temp);
+          
+          if(memcmp(modulation,"UNKN",4))
+          {
+            if(secs != 0)
+            {
+                TimeSource time_source = DCF77;
+                if(!memcmp(modulation,"DCF",3))
+                {
+                   time_source = DCF77;
+                   sprintf(temp,"Receiver: DCF77");
+                   statusAtomic = String(temp);
+                }
+                else
+                if(!memcmp(modulation,"MSF",3))
+                {
+                  time_source = MSF60;
+                  sprintf(temp,"Receiver: MSF60");
+                  statusAtomic = String(temp);
+                }
+                else
+                if(!memcmp(modulation,"JJY",3))
+                {
+                  time_source = JJY;
+                  sprintf(temp,"Receiver: JJY");
+                   statusAtomic = String(temp);
+                }
+                else
+                if(!memcmp(modulation,"WWVB",4))
+                {
+                  time_source = WWVB;
+                  sprintf(temp,"Receiver: WWVB");
+                   statusAtomic = String(temp);
+                }
+      
+    
+                DateTime temp_data = 
+                {
+                  .second = t_secs,
+                  .minute = t_minutes,
+                  .hour = t_hours,
+                  .day = t_days,
+                  .month = t_months,
+                  .year = t_years
+                };
+    
+                DateTime utc_data = convert_to_utc(temp_data, time_source, 0);
+                my_server.timeSource_.updateFromInternalClock(utc_data.second, utc_data.minute, utc_data.hour, utc_data.day, utc_data.month, utc_data.year, modulation);
+            }
+          }
+          
+          receiving_time_index = 0;
+          receiving_time[0] = 0;
+        }
+        else
+        {
+          receiving_time_index++;
+        }
+    
+    }
+  }
+  timeSourceUpdated = 0;
   my_server.timeSource_.getTimeDate(temp,&temp_len);
   uint32_t temp_secs = atoi((const char*)&temp[6]);
   static uint32_t last_secs = 0;
@@ -538,17 +677,25 @@ void loop()
       
       sprintf(temp, "%02d:%02d:%02d",hours,minutes,secs);
       time2 = String(temp);
+      if((timeSource == Manual) || (timeSource == Ntp))
+      {
+        time1 = time2;
+      }
       sprintf(temp, "%02d/%02d/%04d",days,months,years);
       date2 = String(temp);
+      if((timeSource == Manual) || (timeSource == Ntp))
+      {
+        date1 = date2;
+      }
       
       update_disp();
   }
-  
+    
   if (my_server.processOneRequest())
   {
     query_counter++;
     //Serial.printf("NTP Query\r\n");
 
   }
-webserverloop();
+  webserverloop();
 }

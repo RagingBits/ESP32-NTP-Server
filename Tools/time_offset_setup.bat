@@ -1,9 +1,3 @@
-setlocal ENABLEDELAYEDEXPANSION
-
-for /F "delims=" %%a in (ntp_setup_conf.txt) do (set "%%a")
-
-python3 time_offset_setup.py --ip %NTP_IP% --offset %TIME_OFFSET%
-
-echo %outs%
+python3 time_offset_setup.py --ip 192.168.1.17 --offset 0
 
 pause
